@@ -71,6 +71,8 @@ x4 = ueq/Ku;
 
 u1 = ueq;
 
+X_equ3 = [ x1; x2; x3; x4 ]
+
 f_eval = eval(F)
 
 A = double(eval(A_J))
@@ -80,12 +82,15 @@ B = double(eval(B_J))
 obsv(A,C)
 
 %% Generando el sistema de variables de estado
+Ts = 0.1;
+Tf = 100;
+
 D = zeros(size(C,1),1);
 ss1 = ss(A,B,C,D);
-ssDis = c2d(ss1, 0.1);
+ssDis = c2d(ss1, Ts);
 
 %% create MPC controller object with sample time
-mpc1 = mpc(ssDis, 0.1);
+mpc1 = mpc(ssDis, Ts);
 % specify prediction horizon
 mpc1.PredictionHorizon = 100;
 % specify control horizon
@@ -111,46 +116,57 @@ options.MDLookAhead = 'off';
 options.Constraints = 'on';
 options.OpenLoop = 'off';
 
-mpc_RefSignal = 138.5500* ones(2001, 1);
+%%
 
-time = 0:0.1:200;
+time = 0:Ts:Tf;
+Samples = size(time, 2);
 
-% close all
-% [output, time, Ux] = sim(mpc1, 2001, mpc_RefSignal, [], options);
-% plot(time, output)
-% figure()
-% plot(time, Ux)
-
-ym = 0;
 x_state = mpcstate(mpc1);
 
-X_0 = [0, 0, 0, 0];
+xsys = [0;0;0;0];
+YY = zeros(Samples,1);
+UU = zeros(Samples,1);
 
-u_input = zeros(size(time));
+% Real plant
+X_0 = X_equ3';
+% X_0 = [0,0,0,0];
+Y_PLANT = C*X_0';
+YY_PLANT = zeros(Samples,1);
 
-x_plant = zeros(size(time,2),4);
-y_output = zeros(size(time,2),4);
+mpc_RefSignal = 138.5500 * ones(Samples, 1);
 
-y_linear = zeros(size(time,2),4);
-%%
-for i = 1:size(time, 2)
-    % simulated plant and predictive model are identical
-    y_linear(i,:) = ssDis.C*X_0';
-    xmpc.Plant = X_0';
-    u_input(i) = mpcmove(mpc1,x_state,[],1);
+for k = 1:Samples
+     % System
+     ysys = ssDis.C*xsys;
+     x_state.Plant = xsys;
+     
+     % Plant
+     Y_PLANT = C*X_0';
+     
+     % Control action
+     u = mpcmove(mpc1,x_state,ysys,mpc_RefSignal(k),[]);
+     UU(k) = u;
+     
+     % System
+     YY(k) = ysys;
+     % Plant
+     YY_PLANT(k) = Y_PLANT;
+     
+     xsys = ssDis.A*xsys + ssDis.B*u;
+     [t_emulation,x_plant] = plant(u+ueq, X_0, time(k), Ts);
+     
+     % Real plant
+     X_0 = x_plant(size(x_plant,1), :);
 end
 
-stairs(y_linear)
+subplot(2,2,1)
+plot(time,YY);
+title('y_system');
 
-%% using for
-for i = 1:size(time, 2)
-    x_plant(i,:) = X_0;
-    y_output(i) = ym;
-    u_input(i) = mpcmove(mpc1,x_state,ym,mpc_RefSignal(i),[]);
-    [t,x] = plant(u_input(i), X_0, time(i), 0.1);
-    X_0 = x(size(x,1), :);
-    ym = C*X_0';
-end
+subplot(2,2,2)
+plot(time,YY_PLANT);
+title('y_plant');
 
-stairs(time, y_output)
-hold on
+subplot(2,2,3)
+plot(time,UU);
+title('u');

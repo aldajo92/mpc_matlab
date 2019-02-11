@@ -83,7 +83,7 @@ obsv(A,C)
 
 %% Generando el sistema de variables de estado
 Ts = 0.1;
-Tf = 100;
+Tf = 600;
 
 D = zeros(size(C,1),1);
 ss1 = ss(A,B,C,D);
@@ -121,7 +121,7 @@ options.OpenLoop = 'off';
 time = 0:Ts:Tf;
 Samples = size(time, 2);
 
-x_state = mpcstate(mpc1);
+xmpc = mpcstate(mpc1);
 
 xsys = [0;0;0;0];
 YY = zeros(Samples,1);
@@ -131,6 +131,7 @@ UU = zeros(Samples,1);
 X_0 = X_equ3';
 % X_0 = [0,0,0,0];
 Y_PLANT = C*X_0';
+Y_0_PLANT = C*X_0';
 YY_PLANT = zeros(Samples,1);
 
 mpc_RefSignal = 138.5500 * ones(Samples, 1);
@@ -138,18 +139,19 @@ mpc_RefSignal = 138.5500 * ones(Samples, 1);
 for k = 1:Samples
      % System
      ysys = ssDis.C*xsys;
-     x_state.Plant = xsys;
+     xmpc.Plant = xsys;
      
      % Plant
      Y_PLANT = C*X_0';
      
      % Control action
-     u = mpcmove(mpc1,x_state,ysys,mpc_RefSignal(k),[]);
+     u = mpcmove(mpc1,xmpc,ysys,mpc_RefSignal(k),[]);
+%      u = mpcmove(mpc1,xmpc,Y_PLANT-Y_0_PLANT,mpc_RefSignal(k),[]);
      UU(k) = u;
      
-     % System
+     % Save System
      YY(k) = ysys;
-     % Plant
+     % Save Plant
      YY_PLANT(k) = Y_PLANT;
      
      xsys = ssDis.A*xsys + ssDis.B*u;
@@ -161,11 +163,11 @@ end
 
 subplot(2,2,1)
 plot(time,YY);
-title('y_system');
+title('y_{system}');
 
 subplot(2,2,2)
 plot(time,YY_PLANT);
-title('y_plant');
+title('y_{plant}');
 
 subplot(2,2,3)
 plot(time,UU);
